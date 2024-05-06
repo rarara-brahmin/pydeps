@@ -15,7 +15,10 @@ log = logging.getLogger(__name__)
 
 
 class Target(object):
-    """The compilation target.
+    """
+    The compilation target.
+    ファイル名、配置場所、属性(存在有無、Pythonファイルか、モジュールか)などのフラグの作成
+    モジュールであればos.depを.に置換するなどの解析の前処理
     """
     is_pysource = False
     is_module = False
@@ -32,6 +35,7 @@ class Target(object):
         if self.exists:
             self.path = os.path.realpath(path)
         else:  # pragma: nocover
+            # nocoverはカバレッジ対象外の宣言
             print("No such file or directory:", repr(path), file=sys.stderr)
             if os.path.exists(path + '.py'):
                 print("..did you mean:", path + '.py', '?', file=sys.stderr)
@@ -67,19 +71,31 @@ class Target(object):
 
     @contextmanager
     def chdir_work(self):
+        """
+        コンテキストマネージャなのでwith句で使用する。
+        (1)最初にself.workdirに移動して、ターゲットのパッケージのルートディレクトリをモジュール検索パスの先頭に加えてから
+        (2)呼び元の操作を実行して、
+        (3)最後にself.calling_dirに移動して、ターゲットのパッケージのルートディレクトリをモジュール検索パスの先頭から削除する
+        """
         try:
             os.chdir(self.workdir)
             sys.path.insert(0, self.syspath_dir)
+            # ターゲットのパッケージのルートディレクトリをモジュール検索パスの先頭に加える
             yield
         finally:
             os.chdir(self.calling_dir)
             if sys.path[0] == self.syspath_dir:
                 sys.path = sys.path[1:]
+                # モジュール検索パスの先頭がターゲットのパッケージのルートディレクトリであれば、モジュール検索パスからそれを除外する
             self.close()
 
     def get_package_root(self):
+        """
+        __init__.pyが含まれないディレクトリを探して返す（__init__.pyが含まれるフォルダはパッケージとして扱われる）
+        """
         for d in self.get_parents():
             if '__init__.py' not in os.listdir(d):
+                # __init__.pyが含まれないディレクトリを探して返す（__init__.pyが含まれるフォルダはパッケージとして扱われる）
                 return d
 
         raise Exception(
@@ -87,17 +103,26 @@ class Target(object):
             "root of the drive..?")  # pragma: nocover
 
     def get_parents(self):
+        """
+        C:\a\b\testというパスの場合、["C:\a\b\test", "C:\a\b", "C:\a"]という順のリストを作成する
+        """
         def _parent_iter():
             parts = self._path_parts(self.path)
+            # パス文字列を分解する
             for i in range(1, len(parts)):
                 yield os.path.join(*parts[:-i])
+                # リスト名に*をつけるとリストがアンパックして渡される
+                # パスをディレクトリごとに区切ってリスト化している場合には、結合時に上記の表記が必要
         return list(_parent_iter())
 
     def _path_parts(self, pth):
-        """Return a list of all directories in the path ``pth``.
+        """
+        Return a list of all directories in the path ``pth``.
+        パス文字列を\もしくは/で分割する。パスのトップが/（＝Linux？）のときには先頭に/を加える
         """
         res = re.split(r"[\\/]", pth)
         if res and os.path.splitdrive(res[0]) == (res[0], ''):
+            # ドライブ名が空文字（＝Linux？）のとき、ドライブ名に"/"を加える
             res[0] += os.path.sep
         return res
 

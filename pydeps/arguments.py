@@ -34,7 +34,7 @@ class Argument(object):
         if v is None:
             return DEFAULT_NONE
         return v.__class__.__name__.upper()
-    
+
     def typefn(self):
         return typefns.get(self.typename(), identity)
 
@@ -63,7 +63,7 @@ class Argument(object):
             return self._args['dest']
         return self._flags[0].lstrip('-').replace('-', '_')
         # return self._flags[-1].lstrip('-').replace('-', '_')
-    
+
     def help(self):
         if 'help' in self._args:
             return self._args['help']
@@ -112,7 +112,7 @@ class Namespace(object):
 
 
 class Arguments(object):
-    def __init__(self, config_files=None, debug=False, *posargs, parents=None, **kwargs):
+    def __init__(self, config_files=None, debug: bool=False, *posargs, parents=None, **kwargs):
         if config_files is None:
             config_files = []
         # passthrough to argparse
@@ -157,7 +157,7 @@ class Arguments(object):
 
         for arg in arglist:
             debug(arg._args)
-            
+
             default = arg.default()
             if default == DEFAULT_NONE:
                 default = None
@@ -179,7 +179,7 @@ class Arguments(object):
                 typename = 'List[str]'
             # add py3 type annotations
             # print(f"    {arg.argname()}: {typename} = {default}", file=fp)
-            
+
             # witout type annotations
             print("    {argname} = {default}".format(argname=arg.argname(), default=default), file=fp)
 

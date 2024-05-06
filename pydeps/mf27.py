@@ -79,7 +79,9 @@ class ModuleFinder(NativeModuleFinder):
     def load_module(self, fqname, fp, pathname, file_info):
         # fqname = dotted module name we're loading
         suffix, mode, kind = file_info
+        # kindにはrun_scriptで指定したPythonのモードが入る
         kstr = {
+            # Pythonのモードが文字列形式で入る？のか？
             _PKG_DIRECTORY: 'PKG_DIRECTORY',
             _PY_SOURCE: 'PY_SOURCE',
             _PY_COMPILED: 'PY_COMPILED',

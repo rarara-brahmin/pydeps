@@ -34,6 +34,7 @@ from . import depgraph
 from . import mf27
 import logging
 log = logging.getLogger(__name__)
+import target
 
 PYLIB_PATH = depgraph.PYLIB_PATH
 
@@ -79,9 +80,14 @@ class Module(object):
 
 
 class MyModuleFinder(mf27.ModuleFinder):
-    def __init__(self, syspath, *args, **kwargs):
+    """
+    ModuleFinder(https://docs.python.org/ja/3/library/modulefinder.html)の子クラス
+    """
+    def __init__(self, syspath: list[str], *args, **kwargs):
         self.args = kwargs
+
         self.verbose = kwargs.get('verbose', 0)
+        # 引数のverboseキーの要素を取得。verboseキーが存在しない場合は0を格納。
 
         # include all of python std lib (incl. C modules)
         self.include_pylib_all = kwargs.pop('pylib_all', False)
@@ -96,6 +102,8 @@ class MyModuleFinder(mf27.ModuleFinder):
         # path=None, debug=0, excludes=[], replace_paths=[]
 
         debug = 5 if self.verbose >= 4 else 0
+
+        # 親クラスのイニシャライズ
         mf27.ModuleFinder.__init__(self,
                                    path=syspath,
                                    debug=debug,
@@ -103,11 +111,12 @@ class MyModuleFinder(mf27.ModuleFinder):
                                    excludes=kwargs.get('excludes', []))
 
     def add_module(self, fqname):
+        """呼ばれてないのでスルー"""
         if fqname in self.modules:
             return self.modules[fqname]
         self.modules[fqname] = m = Module(fqname)
         return m
-    
+
     def run_script(self, pathname):
         # overridden so we can work directly with .pyc files
         # (the stdlig version hardcodes PY_SOURCE below)
@@ -115,8 +124,8 @@ class MyModuleFinder(mf27.ModuleFinder):
         self.msg(2, "run_script", pathname)
         with open(pathname, 'rb') as fp:
             stuff = (
-                "", 
-                "rb", 
+                "",
+                "rb",
                 imp.PY_COMPILED if pathname.endswith(".pyc") or pathname.endswith(".pyo") else imp.PY_SOURCE
             )
             self.load_module('__main__', fp, pathname, stuff)
@@ -157,7 +166,7 @@ class MyModuleFinder(mf27.ModuleFinder):
         (suffix, mode, kind) = suffix_mode_kind
         try:
             module = mf27.ModuleFinder.load_module(
-                self, 
+                self,
                 fqname, fp, pathname, (suffix, mode, kind)
             )
         except SyntaxError:
@@ -208,8 +217,10 @@ class RawDependencies(object):
         self.types = mf._types
 
 
-def py2dep(target, **kw) -> depgraph.DepGraph:
-    """"Calculate dependencies for ``pattern`` and return a DepGraph.
+def py2dep(target: target.Target, **kw) -> depgraph.DepGraph:
+    """"
+    Calculate dependencies for ``pattern`` and return a DepGraph.
+    依存関係を計算してDepGraphにして返す
     """
     log.info("py2dep(%r)", target)
     dummy = DummyModule(target, **kw)
@@ -219,6 +230,7 @@ def py2dep(target, **kw) -> depgraph.DepGraph:
     syspath.insert(0, target.syspath_dir)
 
     # remove exclude so we don't pass it twice to modulefinder
+    # excludeリストを作成して要素にmigrationsを追加。さらにkwからexcludeキーを抽出して追加。さらにkwからexcludeキーを削除。
     exclude = ['migrations'] + kw.pop('exclude', [])
     log.debug("Exclude: %r", exclude)
     log.debug("KW: %r", kw)
@@ -235,6 +247,7 @@ def py2dep(target, **kw) -> depgraph.DepGraph:
         log.debug("CURDIR: %s", os.getcwd())
         log.debug("FNAME: %r, CONTENT:\n%s\n", dummy.fname, dummy.text())
     mf.run_script(dummy.fname)
+    # これどういう意味…？
 
     log.info("mf._depgraph:\n%s", json.dumps(dict(mf._depgraph), indent=4))
     log.info("mf.badmodules:\n%s", json.dumps(mf.badmodules, indent=4))
@@ -253,6 +266,7 @@ def py2dep(target, **kw) -> depgraph.DepGraph:
 
     log.info("mf._depgraph:\n%s", json.dumps(dict(mf._depgraph), indent=4))
 
+    # ModuleFinder回避のために退避させていたexcludeキーを辞書kwに書き戻す
     kw['exclude'] = exclude
 
     if kw.get('pylib'):
@@ -268,6 +282,7 @@ def py2dep(target, **kw) -> depgraph.DepGraph:
             log.debug('depgraph item: %r %r', k, v)
             if k in pylib:
                 continue
+            # 辞書vのkeyのうちpylibにないものを辞書valsに詰める
             vals = {vk: vv for vk, vv in v.items() if vk not in pylib}
             mf_depgraph[k] = vals
 
@@ -288,6 +303,7 @@ def py2dep(target, **kw) -> depgraph.DepGraph:
 
 
 def py2depgraph():
+    """使われてない？"""
     _fname = sys.argv[1]
     _graph = RawDependencies(_fname)
 

@@ -9,12 +9,13 @@ import sys
 from pydeps.configs import Config
 from . import py2depgraph, cli, dot, target
 from .depgraph2dot import dep2dot, cycles2dot
+import target
 import logging
 from . import colors
 log = logging.getLogger(__name__)
 
 
-def _pydeps(trgt, **kw):
+def _pydeps(trgt: target.Target, **kw):
     # Pass args as a **kw dict since we need to pass it down to functions
     # called, but extract locally relevant parameters first to make the
     # code prettier (and more fault tolerant).
@@ -144,10 +145,19 @@ def pydeps(**args):
        munging before calling ``_pydeps`` (so that function has a clean
        execution path).
     """
+
+    # 再帰回数の上限設定
     sys.setrecursionlimit(10000)
+
     _args = dict(iter(Config(**args))) if args else cli.parse_args(sys.argv[1:])
+    # コマンドライン引数を解析して_argsに詰める。入力変数のargsは__main__.pyでは詰められていないので気にしなくてよし。
+
     _args['curdir'] = os.getcwd()
+    # カレントディレクトリも_argsに詰めておく
+
     inp = target.Target(_args['fname'])
+    # ターゲットファイルの属性解析(ターゲット=inp)
+
     log.debug("Target: %r", inp)
 
     if _args.get('output'):
@@ -159,6 +169,9 @@ def pydeps(**args):
         )
 
     with inp.chdir_work():
+        """
+        self.workdir: ターゲットファイルのディレクトリ
+        """
         # log.debug("Current directory: %s", os.getcwd())
         _args['fname'] = inp.fname
         _args['isdir'] = inp.is_dir

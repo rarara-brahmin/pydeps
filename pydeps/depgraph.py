@@ -81,8 +81,10 @@ class Source(object):
         return self.in_degree + self.out_degree
 
     def is_noise(self):
-        """Is this module just noise?  (too common either at top or bottom of
-           the graph).
+        """
+        Is this module just noise?  (too common either at top or bottom of the graph).
+        当該ライブラリに入る矢印と出る矢印の和をdegreeとして、
+        それがnoise-levelより大きいかを判定する（矢印が多すぎるものは一般的すぎて邪魔という思想？）
         """
         noise = self.args['noise_level']
         if not (self.in_degree and self.out_degree):
@@ -244,7 +246,7 @@ class DepGraph(object):
         """
         res = name
         if name == "__main__" and self.target.is_pysource:
-            # use the target file name directly if we're working on a 
+            # use the target file name directly if we're working on a
             # single file
             return self.target.fname
 
@@ -390,15 +392,22 @@ class DepGraph(object):
                     child.imported_by.add(src.name)
 
     def calculate_bacon(self):
+        """
+        __main__.pyからのimportの階数を計算する？
+        （__main__.pyでしか実質発動しないのでは？）
+        """
         count = defaultdict(int)
 
         def bacon(src, n):
+            """
+            src: DepGraph.sources
+            """
             count[src.name] += 1
             if src.bacon <= n:
                 return
             src.bacon = min(src.bacon, n)
-            for imp in src.imports:
-                bacon(self.sources[imp], n + 1)
+            for imp_mod in src.imports:
+                bacon(self.sources[imp_mod], n + 1)
 
         if '__main__' in self.sources:
             bacon(self.sources['__main__'], 0)
@@ -406,6 +415,9 @@ class DepGraph(object):
             bacon(self.sources[self.args['dummyname']], 0)
 
     def exclude_noise(self):
+        """
+        ノイズ除去？ degreeを計算することにより依存・非依存の多すぎるライブラリをスキップ登録する。
+        """
         for src in list(self.sources.values()):
             if src.excluded:
                 continue
@@ -415,7 +427,9 @@ class DepGraph(object):
                 self._add_skip(src.name)
 
     def exclude_bacon(self, limit):
-        """Exclude modules that are more than `limit` hops away from __main__.
+        """
+        Exclude modules that are more than `limit` hops away from __main__.
+        階層の深すぎるライブラリをスキップ登録する
         """
         for src in list(self.sources.values()):
             if src.bacon > limit:
@@ -423,13 +437,20 @@ class DepGraph(object):
                 self._add_skip(src.name)
 
     def only_filter(self, paths):
-        """Exclude nodes that have a prefix in paths.
+        """
+        Exclude nodes that have a prefix in paths.
+        起動引数 --only MODULE_PATH
+        only include modules that start with MODULE_PATH, multiple paths can be provided
         """
         if not paths:
             return
         paths = set(paths)
 
         def should_include(node):
+            """
+            そのソースの名前がpathsの要素で始まっていたらTrueを返す
+            pathsの要素で始まっているものがなかったらFalseを返す
+            """
             for p in paths:
                 if node.name.startswith(p):
                     return True
@@ -437,6 +458,7 @@ class DepGraph(object):
 
         for src in list(self.sources.values()):
             if not should_include(src):
+                # pathsの要素で始まっているものがなかったらexcludedをTrueにしてスキップ登録
                 src.excluded = True
                 # print "Excluding bacon:", src.name
                 self._add_skip(src.name)
