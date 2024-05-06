@@ -32,9 +32,9 @@ from .dummymodule import DummyModule
 from .pystdlib import pystdlib
 from . import depgraph
 from . import mf27
+from . import target
 import logging
 log = logging.getLogger(__name__)
-import target
 
 PYLIB_PATH = depgraph.PYLIB_PATH
 
@@ -110,13 +110,6 @@ class MyModuleFinder(mf27.ModuleFinder):
                                    # debug=3,
                                    excludes=kwargs.get('excludes', []))
 
-    def add_module(self, fqname):
-        """呼ばれてないのでスルー"""
-        if fqname in self.modules:
-            return self.modules[fqname]
-        self.modules[fqname] = m = Module(fqname)
-        return m
-
     def run_script(self, pathname):
         # overridden so we can work directly with .pyc files
         # (the stdlig version hardcodes PY_SOURCE below)
@@ -129,15 +122,6 @@ class MyModuleFinder(mf27.ModuleFinder):
                 imp.PY_COMPILED if pathname.endswith(".pyc") or pathname.endswith(".pyo") else imp.PY_SOURCE
             )
             self.load_module('__main__', fp, pathname, stuff)
-
-    def import_hook(self, name, caller=None, fromlist=None, level=-1):
-        old_last_caller = self._last_caller
-        try:
-            self._last_caller = caller
-            # print "      last_CALLER:", caller, "OLD-lastcaller:", old_last_caller
-            return mf27.ModuleFinder.import_hook(self, name, caller, fromlist, level)
-        finally:
-            self._last_caller = old_last_caller
 
     def _add_import(self, module):
         if module is not None:
@@ -207,22 +191,11 @@ class MyModuleFinder(mf27.ModuleFinder):
                 # print "  SUB:", sub, "lastcaller:", self._last_caller
 
 
-class RawDependencies(object):
-    def __init__(self, fname, **kw):
-        path = sys.path[:]
-        exclude = []
-        mf = MyModuleFinder(path, exclude, **kw)
-        mf.run_script(fname)
-        self.depgraph = mf._depgraph
-        self.types = mf._types
-
-
 def py2dep(target: target.Target, **kw) -> depgraph.DepGraph:
     """"
     Calculate dependencies for ``pattern`` and return a DepGraph.
     依存関係を計算してDepGraphにして返す
     """
-    log.info("py2dep(%r)", target)
     dummy = DummyModule(target, **kw)
 
     kw['dummyname'] = dummy.fname
@@ -242,75 +215,30 @@ def py2dep(target: target.Target, **kw) -> depgraph.DepGraph:
         excludes=exclude,       # folders to exclude
         **kw
     )
-    mf.debug = max(mf.debug, kw.get('debug_mf', 0))
-    if log.isEnabledFor(logging.DEBUG):
-        log.debug("CURDIR: %s", os.getcwd())
-        log.debug("FNAME: %r, CONTENT:\n%s\n", dummy.fname, dummy.text())
     mf.run_script(dummy.fname)
     # これどういう意味…？
-
-    log.info("mf._depgraph:\n%s", json.dumps(dict(mf._depgraph), indent=4))
-    log.info("mf.badmodules:\n%s", json.dumps(mf.badmodules, indent=4))
-
-    if kw.get('include_missing'):
-        for k, vdict in list(mf.badmodules.items()):
-            if k not in mf._depgraph:
-                mf._depgraph[k] = {}
-            for v in vdict:
-                if not target.is_pysource and v not in mf._depgraph['__main__']:
-                    mf._depgraph['__main__'][v] = None
-                if v in mf._depgraph:
-                    mf._depgraph[v][k] = None
-                else:
-                    mf._depgraph[v] = {k: None}
 
     log.info("mf._depgraph:\n%s", json.dumps(dict(mf._depgraph), indent=4))
 
     # ModuleFinder回避のために退避させていたexcludeキーを辞書kwに書き戻す
     kw['exclude'] = exclude
 
-    if kw.get('pylib'):
-        mf_depgraph = mf._depgraph
-        for k, v in list(mf._depgraph.items()):
-            log.debug('depgraph item: %r %r', k, v)
-        # mf_modules = {k: os.syspath.abspath(v.__file__)
-        #               for k, v in mf.modules.items()}
-    else:
-        pylib = pystdlib()
-        mf_depgraph = {}
-        for k, v in list(mf._depgraph.items()):
-            log.debug('depgraph item: %r %r', k, v)
-            if k in pylib:
-                continue
-            # 辞書vのkeyのうちpylibにないものを辞書valsに詰める
-            vals = {vk: vv for vk, vv in v.items() if vk not in pylib}
-            mf_depgraph[k] = vals
+    # ①Python標準ライブラリのリストを作成
+    # ②DepGraphにあるライブラリがPython標準ライブラリかを判定
+    # ③Python標準ライブラリではないものだけをパッキングしなおす
+    pylib = pystdlib()
+    mf_depgraph = {}
+    for k, v in list(mf._depgraph.items()):
+        log.debug('depgraph item: %r %r', k, v)
+        if k in pylib:
+            continue
+        # 辞書vのkeyのうちpylibにないものを辞書valsに詰める
+        vals = {vk: vv for vk, vv in v.items() if vk not in pylib}
+        mf_depgraph[k] = vals
 
-        # mf_modules = {k: os.syspath.abspath(v.__file__)
-        #               for k, v in mf.modules.items()
-        #               if k not in pylib}
-
-    try:
-        import yaml
-        log.info("mf_depgraph:\n%s",
-                 yaml.dump(dict(mf_depgraph), default_flow_style=False))
-        # log.error("mf._types:\n%s", yaml.dump(mf._types, default_flow_style=False))
-        # log.debug("mf_modules:\n%s", yaml.dump(mf_modules, default_flow_style=False))
-    except ImportError:
-        log.info("mf_depgraph:\n%s", json.dumps(dict(mf_depgraph), indent=4))
 
     return depgraph.DepGraph(mf_depgraph, mf._types, target, **kw)
 
 
-def py2depgraph():
-    """使われてない？"""
-    _fname = sys.argv[1]
-    _graph = RawDependencies(_fname)
-
-    sys.stdout.write(
-        json.dumps(_graph.__dict__, indent=4)
-    )
-
-
 if __name__ == '__main__':
-    py2depgraph()
+    pass

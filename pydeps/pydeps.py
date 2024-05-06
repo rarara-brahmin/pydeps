@@ -9,86 +9,36 @@ import sys
 from pydeps.configs import Config
 from . import py2depgraph, cli, dot, target
 from .depgraph2dot import dep2dot, cycles2dot
-import target
 import logging
 from . import colors
 log = logging.getLogger(__name__)
 
 
 def _pydeps(trgt: target.Target, **kw):
+    print("_pydeps")
     # Pass args as a **kw dict since we need to pass it down to functions
     # called, but extract locally relevant parameters first to make the
     # code prettier (and more fault tolerant).
-    # print("KW:", kw, '\n', os.getcwd())
-    # print('abspath:', os.path.abspath(kw.get('deps_out')))
-    # print('target', trgt.workdir)
-    # print('target', trgt)
-    colors.START_COLOR = kw.get('start_color')
-    # show_cycles = kw.get('show_cycles')
-    nodot = kw.get('no_dot')
-    no_output = kw.get('no_output')
     output = kw.get('output')
-    fmt = kw['format']
-    show_svg = kw.get('show')
-    deps_out = kw.get('deps_out')
-    dot_out = kw.get('dot_out')
-    # reverse = kw.get('reverse')
-    if os.getcwd() != trgt.workdir:
-        # the tests are calling _pydeps directoy
-        os.chdir(trgt.workdir)
 
     dep_graph = py2depgraph.py2dep(trgt, **kw)
 
-    if kw.get('show_deps'):
-        cli.verbose("DEPS:")
-        if deps_out:
-            # make sure output files are written to sensible directories
-            directory, _fname = os.path.split(deps_out)
-            if not directory:
-                deps_out = os.path.join(trgt.calling_dir, deps_out)
-            with open(deps_out, 'w') as fp:
-                fp.write(dep_graph.__json__())
-        else:
-            print(dep_graph.__json__())
-
     dotsrc = depgraph_to_dotsrc(trgt, dep_graph, **kw)
 
-    if not nodot:
-        if kw.get('show_dot'):
-            cli.verbose("DOTSRC:")
-            if dot_out:
-                # make sure output files are written to sensible directories
-                directory, _fname = os.path.split(dot_out)
-                if not directory:
-                    dot_out = os.path.join(trgt.calling_dir, dot_out)
-                with open(dot_out, 'w') as fp:
-                    fp.write(dotsrc)
-            else:
-                print(dotsrc)
 
-        if not no_output:
-            try:
-                svg = dot.call_graphviz_dot(dotsrc, fmt)
-            except OSError as cause:
-                raise RuntimeError("While rendering {!r}: {}".format(output, cause))
-            if fmt == 'svg':
-                svg = svg.replace(b'</title>', b'</title><style>.edge>path:hover{stroke-width:8}</style>')
+    try:
+        svg = dot.call_graphviz_dot(dotsrc, "svg")
+    except OSError as cause:
+        raise RuntimeError("While rendering {!r}: {}".format(output, cause))
 
-            try:
-                with open(output, 'wb') as fp:
-                    cli.verbose("Writing output to:", output)
-                    fp.write(svg)
-            except OSError as cause:
-                raise RuntimeError("While writing {!r}: {}".format(output, cause))
+    svg = svg.replace(b'</title>', b'</title><style>.edge>path:hover{stroke-width:8}</style>')
 
-            if show_svg:
-                try:
-                    dot.display_svg(kw, output)
-                except OSError as cause:
-                    helpful = ""
-                    if cause.errno == 2:
-                        helpful = " (can be caused by not finding the program to open this file)"
-                    raise RuntimeError("While opening {!r}: {}{}".format(output, cause, helpful))
+    try:
+        with open(output, 'wb') as fp:
+            cli.verbose("Writing output to:", output)
+            fp.write(svg)
+    except OSError as cause:
+        raise RuntimeError("While writing {!r}: {}".format(output, cause))
 
 
 def depgraph_to_dotsrc(target, dep_graph, **kw):
@@ -145,12 +95,13 @@ def pydeps(**args):
        munging before calling ``_pydeps`` (so that function has a clean
        execution path).
     """
+    print("call pydeps")
 
     # 再帰回数の上限設定
     sys.setrecursionlimit(10000)
 
-    _args = dict(iter(Config(**args))) if args else cli.parse_args(sys.argv[1:])
-    # コマンドライン引数を解析して_argsに詰める。入力変数のargsは__main__.pyでは詰められていないので気にしなくてよし。
+    _args = cli.parse_args(sys.argv[1:])
+    # コマンドライン引数の解析
 
     _args['curdir'] = os.getcwd()
     # カレントディレクトリも_argsに詰めておく
@@ -158,39 +109,23 @@ def pydeps(**args):
     inp = target.Target(_args['fname'])
     # ターゲットファイルの属性解析(ターゲット=inp)
 
-    log.debug("Target: %r", inp)
-
-    if _args.get('output'):
-        _args['output'] = os.path.abspath(_args['output'])
-    else:
-        _args['output'] = os.path.join(
-            inp.calling_dir,
-            inp.modpath.replace('.', '_') + '.' + _args.get('format', 'svg')
-        )
+    _args['output'] = os.path.join(
+        inp.calling_dir,
+        inp.modpath.replace('.', '_') + '.svg'
+    )
 
     with inp.chdir_work():
         """
         self.workdir: ターゲットファイルのディレクトリ
         """
-        # log.debug("Current directory: %s", os.getcwd())
-        _args['fname'] = inp.fname
-        _args['isdir'] = inp.is_dir
 
-        if _args.get('externals'):
-            del _args['fname']
-            exts = externals(inp, **_args)
-            print(json.dumps(exts, indent=4))
-            # return exts  # so the tests can assert
-
-        else:
-            # this is the call you're looking for :-)
-            try:
-                return _pydeps(inp, **_args)
-            except (OSError, RuntimeError) as cause:
-                if log.isEnabledFor(logging.DEBUG):
-                    # we only want to log the exception if we're in debug mode
-                    log.exception("While running pydeps:")
-                cli.error(str(cause))
+        try:
+            return _pydeps(inp, **_args)
+        except (OSError, RuntimeError) as cause:
+            if log.isEnabledFor(logging.DEBUG):
+                # we only want to log the exception if we're in debug mode
+                log.exception("While running pydeps:")
+            cli.error(str(cause))
 
 
 def call_pydeps(file_or_dir, **kwargs):
