@@ -32,9 +32,9 @@ from .dummymodule import DummyModule
 from .pystdlib import pystdlib
 from . import depgraph
 from . import mf27
+from . import target
 import logging
 log = logging.getLogger(__name__)
-import target
 
 PYLIB_PATH = depgraph.PYLIB_PATH
 

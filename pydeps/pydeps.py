@@ -9,7 +9,6 @@ import sys
 from pydeps.configs import Config
 from . import py2depgraph, cli, dot, target
 from .depgraph2dot import dep2dot, cycles2dot
-import target
 import logging
 from . import colors
 log = logging.getLogger(__name__)
