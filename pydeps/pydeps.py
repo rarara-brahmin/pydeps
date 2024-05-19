@@ -15,79 +15,26 @@ log = logging.getLogger(__name__)
 
 
 def _pydeps(trgt: target.Target, **kw):
-    # Pass args as a **kw dict since we need to pass it down to functions
-    # called, but extract locally relevant parameters first to make the
-    # code prettier (and more fault tolerant).
-    # print("KW:", kw, '\n', os.getcwd())
-    # print('abspath:', os.path.abspath(kw.get('deps_out')))
-    # print('target', trgt.workdir)
-    # print('target', trgt)
+    # kwは起動引数で指定されない場合、デフォルト値が詰まっている。
     colors.START_COLOR = kw.get('start_color')
-    # show_cycles = kw.get('show_cycles')
-    nodot = kw.get('no_dot')
-    no_output = kw.get('no_output')
     output = kw.get('output')
     fmt = kw['format']
-    show_svg = kw.get('show')
-    deps_out = kw.get('deps_out')
-    dot_out = kw.get('dot_out')
-    # reverse = kw.get('reverse')
+
     if os.getcwd() != trgt.workdir:
-        # the tests are calling _pydeps directoy
         os.chdir(trgt.workdir)
 
     dep_graph = py2depgraph.py2dep(trgt, **kw)
 
-    if kw.get('show_deps'):
-        cli.verbose("DEPS:")
-        if deps_out:
-            # make sure output files are written to sensible directories
-            directory, _fname = os.path.split(deps_out)
-            if not directory:
-                deps_out = os.path.join(trgt.calling_dir, deps_out)
-            with open(deps_out, 'w') as fp:
-                fp.write(dep_graph.__json__())
-        else:
-            print(dep_graph.__json__())
-
     dotsrc = depgraph_to_dotsrc(trgt, dep_graph, **kw)
 
-    if not nodot:
-        if kw.get('show_dot'):
-            cli.verbose("DOTSRC:")
-            if dot_out:
-                # make sure output files are written to sensible directories
-                directory, _fname = os.path.split(dot_out)
-                if not directory:
-                    dot_out = os.path.join(trgt.calling_dir, dot_out)
-                with open(dot_out, 'w') as fp:
-                    fp.write(dotsrc)
-            else:
-                print(dotsrc)
+    svg = dot.call_graphviz_dot(dotsrc, fmt)
+    svg = svg.replace(b'</title>', b'</title><style>.edge>path:hover{stroke-width:8}</style>')
 
-        if not no_output:
-            try:
-                svg = dot.call_graphviz_dot(dotsrc, fmt)
-            except OSError as cause:
-                raise RuntimeError("While rendering {!r}: {}".format(output, cause))
-            if fmt == 'svg':
-                svg = svg.replace(b'</title>', b'</title><style>.edge>path:hover{stroke-width:8}</style>')
+    with open(output, 'wb') as fp:
+        cli.verbose("Writing output to:", output)
+        fp.write(svg)
 
-            try:
-                with open(output, 'wb') as fp:
-                    cli.verbose("Writing output to:", output)
-                    fp.write(svg)
-            except OSError as cause:
-                raise RuntimeError("While writing {!r}: {}".format(output, cause))
-
-            if show_svg:
-                try:
-                    dot.display_svg(kw, output)
-                except OSError as cause:
-                    helpful = ""
-                    if cause.errno == 2:
-                        helpful = " (can be caused by not finding the program to open this file)"
-                    raise RuntimeError("While opening {!r}: {}{}".format(output, cause, helpful))
+    dot.display_svg(kw, output)
 
 
 def depgraph_to_dotsrc(target, dep_graph, **kw):
@@ -148,8 +95,9 @@ def pydeps(**args):
     # 再帰回数の上限設定
     sys.setrecursionlimit(10000)
 
-    _args = dict(iter(Config(**args))) if args else cli.parse_args(sys.argv[1:])
-    # コマンドライン引数を解析して_argsに詰める。入力変数のargsは__main__.pyでは詰められていないので気にしなくてよし。
+    _args = cli.parse_args(sys.argv[1:])
+    # コマンドライン引数を解析して_argsに詰める。引数がない場合もデフォルトを指定。
+    # 入力変数のargsは__main__.pyでは詰められていないので気にしなくてよし。
 
     _args['curdir'] = os.getcwd()
     # カレントディレクトリも_argsに詰めておく
