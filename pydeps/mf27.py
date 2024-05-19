@@ -79,18 +79,18 @@ class ModuleFinder(NativeModuleFinder):
     def load_module(self, fqname, fp, pathname, file_info):
         # fqname = dotted module name we're loading
         suffix, mode, kind = file_info
-        # kindにはrun_scriptで指定したPythonのモードが入る
+        # kindにはrun_scriptで指定したPythonのファイル種別(PY_COMPILED or PY_SOURCE)が入る
         kstr = {
-            # Pythonのモードが文字列形式で入る？のか？
+            # PY_SOURCE = 1, PY_COMPILED = 2, PKG_DIRECTORY = 5 (mfimp.pyで規定)
             _PKG_DIRECTORY: 'PKG_DIRECTORY',
             _PY_SOURCE: 'PY_SOURCE',
             _PY_COMPILED: 'PY_COMPILED',
         }.get(kind, 'unknown-kind')
-        self.msgin(2, "load_module(%s) fqname=%s, fp=%s, pathname=%s" % (kstr, fqname, fp and "fp", pathname))
+        # Pythonファイル種別を文字列で格納する（不明な場合'unknown-kind'を格納）
+        # そもそもやる意味あんのかコレ？ 後のコードでは変換前のkindで判定してるし、、、
 
         if kind == _PKG_DIRECTORY:
             module = self.load_package(fqname, pathname)
-            self.msgout(2, "load_module ->", module)
             return module
 
         if kind == _PY_SOURCE:
@@ -110,37 +110,6 @@ class ModuleFinder(NativeModuleFinder):
             except ImportError:
                 self.msgout(2, "raise ImportError: Bad magic number", pathname)
                 raise ImportError("Bad magic number in %s" % pathname)
-
-            # if fp.read(4) != MAGIC_NUMBER:
-            #     self.msgout(2, "raise ImportError: Bad magic number", pathname)
-            #     raise ImportError("Bad magic number in %s" % pathname)
-            # fp.read(4)   # skip modification timestamp
-            # co = marshal.load(fp)  # load marshalled code object.
-
-            # adapted from https://github.com/nedbat/coveragepy/blob/master/lab/show_pyc.py#L21
-            # if fp.read(4) != MAGIC_NUMBER:
-            #     self.msgout(2, "raise ImportError: Bad magic number", pathname)
-            #     raise ImportError("Bad magic number in %s" % pathname)
-
-            # read_date_and_size = True
-            # if sys.version_info >= (3, 7):
-            #     # 3.7 added a flags word
-            #     flags = struct.unpack('<L', fp.read(4))[0]
-            #     hash_based = bool(flags & 0x01)
-            #     check_source = bool(flags & 0x02)
-            #     # print(f"flags 0x{flags:08x}")
-            #     if hash_based:
-            #         source_hash = fp.read(8)
-            #         read_date_and_size = False
-            #         # print(f"hash {binascii.hexlify(source_hash)}")
-            #         # print(f"check_source {check_source}")
-            # if read_date_and_size:
-            #     moddate = fp.read(4)
-            #     modtime = time.asctime(time.localtime(struct.unpack('<L', moddate)[0]))
-            #     # print(f"moddate {binascii.hexlify(moddate)} ({modtime})")
-            #     size = fp.read(4)
-            #     # print("pysize %s (%d)" % (binascii.hexlify(size), struct.unpack('<L', size)[0]))
-            # co = marshal.load(fp)
 
         else:
             co = None

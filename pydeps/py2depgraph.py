@@ -93,7 +93,6 @@ class MyModuleFinder(mf27.ModuleFinder):
         self.include_pylib_all = kwargs.pop('pylib_all', False)
 
         # include python std lib modules.
-        # self.include_pylib = kwargs.pop('pylib', self.include_pylib_all)
         self.include_pylib = kwargs.pop('pylib', self.include_pylib_all)
 
         self._depgraph = defaultdict(dict)
@@ -161,7 +160,7 @@ class MyModuleFinder(mf27.ModuleFinder):
         return module
 
     def load_module(self, fqname, fp, pathname, suffix_mode_kind):
-        # log.debug("load_module(%r, %r, %r, %r)", fqname, fp, pathname, suffix_mode_kind)
+        # suffix_mode_kindは("", "rb", imp.PY_COMPILED or imp.PY_SOURCE)が入る。
         (suffix, mode, kind) = suffix_mode_kind
         try:
             module = mf27.ModuleFinder.load_module(
@@ -229,8 +228,11 @@ def py2dep(target: target.Target, **kw) -> depgraph.DepGraph:
     syspath.insert(0, target.syspath_dir)
 
     # remove exclude so we don't pass it twice to modulefinder
-    # excludeリストを作成して要素にmigrationsを追加。さらにkwからexcludeキーを抽出して追加。さらにkwからexcludeキーを削除。
+    # excludeリストを作成して要素にmigrationsを追加。さらにkwからexcludeキーをexcludeリストに追加。さらにkwからexcludeキーを削除。
     exclude = ['migrations'] + kw.pop('exclude', [])
+
+    # マニュアルにpositional arguments: fname filenameって書いてあるけど、
+    # filenameの代わりにfnameって入れてくる人が多いからわざわざ削除している説
     if 'fname' in kw:
         del kw['fname']
 
@@ -243,10 +245,12 @@ def py2dep(target: target.Target, **kw) -> depgraph.DepGraph:
     # これどういう意味…？
 
     for k, vdict in list(mf.badmodules.items()):
+    # badmodulesってのがModuleFinderモジュールのドキュメントに載ってないからよくわからん。
         if k not in mf._depgraph:
             mf._depgraph[k] = {}
         for v in vdict:
             if not target.is_pysource and v not in mf._depgraph['__main__']:
+            # mf._depgraph['__main__']はいつ作られるのか？
                 mf._depgraph['__main__'][v] = None
             if v in mf._depgraph:
                 mf._depgraph[v][k] = None
