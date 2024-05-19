@@ -123,6 +123,15 @@ class MyModuleFinder(mf27.ModuleFinder):
             )
             self.load_module('__main__', fp, pathname, stuff)
 
+    def import_hook(self, name, caller=None, fromlist=None, level=-1):
+        old_last_caller = self._last_caller
+        try:
+            self._last_caller = caller
+            # print "      last_CALLER:", caller, "OLD-lastcaller:", old_last_caller
+            return mf27.ModuleFinder.import_hook(self, name, caller, fromlist, level)
+        finally:
+            self._last_caller = old_last_caller
+
     def _add_import(self, module):
         if module is not None:
             if self._last_caller:
