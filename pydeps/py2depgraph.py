@@ -111,7 +111,6 @@ class MyModuleFinder(mf27.ModuleFinder):
                                    excludes=kwargs.get('excludes', []))
 
     def add_module(self, fqname):
-        """呼ばれてないのでスルー"""
         if fqname in self.modules:
             return self.modules[fqname]
         self.modules[fqname] = m = Module(fqname)
