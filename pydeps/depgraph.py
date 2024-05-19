@@ -179,7 +179,8 @@ class DepGraph(object):
 
     def __init__(self, depgraf: dict, types, _target: target.Target, **args):
         # depgraph is py2depgraph.MyModulefinder._depgraph
-        # DepGraphクラスはどの単位で作られるクラスなのか？モジュール？
+        # DepGraphクラスはどの単位で作られるクラスなのか？モジュール？ ⇒ １個のみ作られる
+        # depgrafはpy2depgraph.pyのpy2dep()のmf_depgraph（mf._depgraphのアイテムのうちpylibにないものを集めたdict）
 
         self.curhue = 150  # start with a green-ish color
         self.colors = {}
