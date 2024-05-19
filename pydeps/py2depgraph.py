@@ -231,8 +231,6 @@ def py2dep(target: target.Target, **kw) -> depgraph.DepGraph:
     # remove exclude so we don't pass it twice to modulefinder
     # excludeリストを作成して要素にmigrationsを追加。さらにkwからexcludeキーを抽出して追加。さらにkwからexcludeキーを削除。
     exclude = ['migrations'] + kw.pop('exclude', [])
-    log.debug("Exclude: %r", exclude)
-    log.debug("KW: %r", kw)
     if 'fname' in kw:
         del kw['fname']
 
@@ -241,15 +239,8 @@ def py2dep(target: target.Target, **kw) -> depgraph.DepGraph:
         excludes=exclude,       # folders to exclude
         **kw
     )
-    mf.debug = max(mf.debug, kw.get('debug_mf', 0))
-    if log.isEnabledFor(logging.DEBUG):
-        log.debug("CURDIR: %s", os.getcwd())
-        log.debug("FNAME: %r, CONTENT:\n%s\n", dummy.fname, dummy.text())
     mf.run_script(dummy.fname)
     # これどういう意味…？
-
-    log.info("mf._depgraph:\n%s", json.dumps(dict(mf._depgraph), indent=4))
-    log.info("mf.badmodules:\n%s", json.dumps(mf.badmodules, indent=4))
 
     if kw.get('include_missing'):
         for k, vdict in list(mf.badmodules.items()):
@@ -272,8 +263,6 @@ def py2dep(target: target.Target, **kw) -> depgraph.DepGraph:
         mf_depgraph = mf._depgraph
         for k, v in list(mf._depgraph.items()):
             log.debug('depgraph item: %r %r', k, v)
-        # mf_modules = {k: os.syspath.abspath(v.__file__)
-        #               for k, v in mf.modules.items()}
     else:
         pylib = pystdlib()
         mf_depgraph = {}
@@ -284,19 +273,6 @@ def py2dep(target: target.Target, **kw) -> depgraph.DepGraph:
             # 辞書vのkeyのうちpylibにないものを辞書valsに詰める
             vals = {vk: vv for vk, vv in v.items() if vk not in pylib}
             mf_depgraph[k] = vals
-
-        # mf_modules = {k: os.syspath.abspath(v.__file__)
-        #               for k, v in mf.modules.items()
-        #               if k not in pylib}
-
-    try:
-        import yaml
-        log.info("mf_depgraph:\n%s",
-                 yaml.dump(dict(mf_depgraph), default_flow_style=False))
-        # log.error("mf._types:\n%s", yaml.dump(mf._types, default_flow_style=False))
-        # log.debug("mf_modules:\n%s", yaml.dump(mf_modules, default_flow_style=False))
-    except ImportError:
-        log.info("mf_depgraph:\n%s", json.dumps(dict(mf_depgraph), indent=4))
 
     return depgraph.DepGraph(mf_depgraph, mf._types, target, **kw)
 
