@@ -159,13 +159,10 @@ def pydeps(**args):
 
     log.debug("Target: %r", inp)
 
-    if _args.get('output'):
-        _args['output'] = os.path.abspath(_args['output'])
-    else:
-        _args['output'] = os.path.join(
-            inp.calling_dir,
-            inp.modpath.replace('.', '_') + '.' + _args.get('format', 'svg')
-        )
+
+    _args['output'] = os.path.join(
+        inp.calling_dir,
+        inp.modpath.replace('.', '_') + '.' + _args.get('format', 'svg'))
 
     with inp.chdir_work():
         """
@@ -175,21 +172,7 @@ def pydeps(**args):
         _args['fname'] = inp.fname
         _args['isdir'] = inp.is_dir
 
-        if _args.get('externals'):
-            del _args['fname']
-            exts = externals(inp, **_args)
-            print(json.dumps(exts, indent=4))
-            # return exts  # so the tests can assert
-
-        else:
-            # this is the call you're looking for :-)
-            try:
-                return _pydeps(inp, **_args)
-            except (OSError, RuntimeError) as cause:
-                if log.isEnabledFor(logging.DEBUG):
-                    # we only want to log the exception if we're in debug mode
-                    log.exception("While running pydeps:")
-                cli.error(str(cause))
+        return _pydeps(inp, **_args)
 
 
 def call_pydeps(file_or_dir, **kwargs):
