@@ -242,37 +242,29 @@ def py2dep(target: target.Target, **kw) -> depgraph.DepGraph:
     mf.run_script(dummy.fname)
     # これどういう意味…？
 
-    if kw.get('include_missing'):
-        for k, vdict in list(mf.badmodules.items()):
-            if k not in mf._depgraph:
-                mf._depgraph[k] = {}
-            for v in vdict:
-                if not target.is_pysource and v not in mf._depgraph['__main__']:
-                    mf._depgraph['__main__'][v] = None
-                if v in mf._depgraph:
-                    mf._depgraph[v][k] = None
-                else:
-                    mf._depgraph[v] = {k: None}
-
-    log.info("mf._depgraph:\n%s", json.dumps(dict(mf._depgraph), indent=4))
+    for k, vdict in list(mf.badmodules.items()):
+        if k not in mf._depgraph:
+            mf._depgraph[k] = {}
+        for v in vdict:
+            if not target.is_pysource and v not in mf._depgraph['__main__']:
+                mf._depgraph['__main__'][v] = None
+            if v in mf._depgraph:
+                mf._depgraph[v][k] = None
+            else:
+                mf._depgraph[v] = {k: None}
 
     # ModuleFinder回避のために退避させていたexcludeキーを辞書kwに書き戻す
     kw['exclude'] = exclude
 
-    if kw.get('pylib'):
-        mf_depgraph = mf._depgraph
-        for k, v in list(mf._depgraph.items()):
-            log.debug('depgraph item: %r %r', k, v)
-    else:
-        pylib = pystdlib()
-        mf_depgraph = {}
-        for k, v in list(mf._depgraph.items()):
-            log.debug('depgraph item: %r %r', k, v)
-            if k in pylib:
-                continue
-            # 辞書vのkeyのうちpylibにないものを辞書valsに詰める
-            vals = {vk: vv for vk, vv in v.items() if vk not in pylib}
-            mf_depgraph[k] = vals
+    pylib = pystdlib()
+    mf_depgraph = {}
+    for k, v in list(mf._depgraph.items()):
+        log.debug('depgraph item: %r %r', k, v)
+        if k in pylib:
+            continue
+        # 辞書vのkeyのうちpylibにないものを辞書valsに詰める
+        vals = {vk: vv for vk, vv in v.items() if vk not in pylib}
+        mf_depgraph[k] = vals
 
     return depgraph.DepGraph(mf_depgraph, mf._types, target, **kw)
 

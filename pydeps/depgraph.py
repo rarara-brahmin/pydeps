@@ -9,7 +9,7 @@ import pprint
 import re
 import enum
 
-from . import colors, cli
+from . import colors, cli, target
 import sys
 import logging
 log = logging.getLogger(__name__)
@@ -133,6 +133,8 @@ class Source(object):
     def __iadd__(self, other):
         """Merge other into self.
         """
+
+        # 追加しようとしているモジュールが自分自身と同じであれば何もしないで返す（name, imports, baconプロパティで判断）
         if self.name == other.name and self.imports == other.imports and self.bacon == other.bacon:
             return self
         log.debug("iadd lhs: %r", self)
@@ -175,9 +177,9 @@ class DepGraph(object):
         south
         """.split()
 
-    def __init__(self, depgraf, types, target, **args):
+    def __init__(self, depgraf: dict, types, _target: target.Target, **args):
         # depgraph is py2depgraph.MyModulefinder._depgraph
-        log.debug("DepGraph: depgraf=%r", depgraf)
+        # DepGraphクラスはどの単位で作られるクラスなのか？モジュール？
 
         self.curhue = 150  # start with a green-ish color
         self.colors = {}
@@ -185,25 +187,27 @@ class DepGraph(object):
         self.cyclenodes = set()
         self.cyclerelations = set()
         self.max_module_depth = args.get('max_module_depth', 0)
-        self.target = target
+        self.target: target.Target = _target
 
         self.args = args
 
         #: dict[module_name] -> Source object
         self.sources = {}
         self.skiplist = [re.compile(fnmatch.translate(arg)) for arg in args['exclude']]
+        # fnmatch.translate(pattern): シェルスタイルの pattern を、re.match() で使用するための正規表現に変換
+        # 例) *.txt ⇒ (?s:.*\\.txt)\\Z
+
         self.skiplist += [re.compile('^%s$' % fnmatch.translate(arg)) for arg in args['exclude_exact']]
-        # depgraf = {name: imports for (name, imports) in depgraf.items()}
+        # 正規表現中の%sを%以降の文字列に置換する。
+        # 例) "'aaa%sbbb' % 'あ' ⇒ 'aaaあbbb'
 
         for name, imports in depgraf.items():
-            log.debug("depgraph name=%r imports=%r", name, imports)
             src = Source(
                 name=self.source_name(name),
                 imports=[self.source_name(n) for n in imports.keys()],  # values handled below
                 args=args,
                 exclude=self._exclude(name),
             )
-            log.debug("depgraph src=%r", src)
             self.add_source(src)
             for iname, path in imports.items():
                 src = Source(
@@ -221,15 +225,12 @@ class DepGraph(object):
         if self.args['show_cycles']:
             self.find_import_cycles()
         self.calculate_bacon()
-        if self.args['show_raw_deps']:
-            print(self)
 
         self.exclude_noise()
         self.exclude_bacon(self.args['max_bacon'])
         self.only_filter(self.args.get('only'))
 
         excluded = [v for v in list(self.sources.values()) if v.excluded]
-        # print "EXCLUDED:", excluded
         self.skip_count = len(excluded)
         cli.verbose(1, "skipping", self.skip_count, "modules")
         for module in excluded:
@@ -238,17 +239,17 @@ class DepGraph(object):
 
         self.remove_excluded()
 
-        if not self.args['show_deps']:
-            cli.verbose(3, self)
+        cli.verbose(3, self)
 
     def source_name(self, name, path=None):
         """Returns the module name, possibly limited by --max-module-depth.
         """
         res = name
         if name == "__main__" and self.target.is_pysource:
-            # use the target file name directly if we're working on a
-            # single file
-            return self.target.fname
+            # use the target file name directly if we're working on a single file
+            # 単一のファイルで作業している場合は、ターゲットファイル名を直接使用する。
+            # ↑どういうケースなのかイマイチわからない。
+            return self.target.fname    # fnameはos.path.basename(self.path)のこと
 
         if name == "__main__" and path:
             # use the path to the main module if we're working on a module.
@@ -326,9 +327,11 @@ class DepGraph(object):
         if src.name in self.sources:
             log.debug("ADD-SOURCE[+=]\n%r", src)
             self.sources[src.name] += src   # merge
+            # Sourceクラスは__iadd__メソッドを定義することにより+=処理を可能にしている。
         else:
             log.debug("ADD-SOURCE[=]\n%r", src)
             self.sources[src.name] = src
+            # self.sourcesにSourceクラスを追加する。
 
     def __getitem__(self, item):
         return self.sources[item]
