@@ -127,6 +127,7 @@ class MyModuleFinder(mf27.ModuleFinder):
                 imp.PY_COMPILED if pathname.endswith(".pyc") or pathname.endswith(".pyo") else imp.PY_SOURCE
             )
             self.load_module('__main__', fp, pathname, stuff)
+            # ここってfqnameは常に'__main__'でいいんだろうか。謎。
 
     def import_hook(self, name, caller=None, fromlist=None, level=-1):
         old_last_caller = self._last_caller
@@ -160,6 +161,9 @@ class MyModuleFinder(mf27.ModuleFinder):
         return module
 
     def load_module(self, fqname, fp, pathname, suffix_mode_kind):
+        """
+        fqnameで指定されたモジュールを解析（コードをコンパイル等）してModuleクラスを返す。
+        """
         # suffix_mode_kindは("", "rb", imp.PY_COMPILED or imp.PY_SOURCE)が入る。
         (suffix, mode, kind) = suffix_mode_kind
         try:
@@ -174,7 +178,8 @@ class MyModuleFinder(mf27.ModuleFinder):
             module = None
         except AttributeError as e:
             # See issues #139 and #140...
-            print("ERROR trying to load {} from {} (py38+ _find_module reimplementation of imp.find_module called .is_package on None...)\n{}".format(
+            print("ERROR trying to load {} from {} (py38+ _find"
+                  "_module reimplementation of imp.find_module called .is_package on None...)\n{}".format(
                 fqname, pathname,
                 e
             ))

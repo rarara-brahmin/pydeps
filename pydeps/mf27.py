@@ -77,17 +77,13 @@ class ModuleFinder(NativeModuleFinder):
         return None
 
     def load_module(self, fqname, fp, pathname, file_info):
+        """
+        sourceの場合、コードをコンパイル(オペコード化)して解析しmodulefinder.Moduleに詰めて返すっぽい。
+
+        """
         # fqname = dotted module name we're loading
         suffix, mode, kind = file_info
         # kindにはrun_scriptで指定したPythonのファイル種別(PY_COMPILED or PY_SOURCE)が入る
-        kstr = {
-            # PY_SOURCE = 1, PY_COMPILED = 2, PKG_DIRECTORY = 5 (mfimp.pyで規定)
-            _PKG_DIRECTORY: 'PKG_DIRECTORY',
-            _PY_SOURCE: 'PY_SOURCE',
-            _PY_COMPILED: 'PY_COMPILED',
-        }.get(kind, 'unknown-kind')
-        # Pythonファイル種別を文字列で格納する（不明な場合'unknown-kind'を格納）
-        # そもそもやる意味あんのかコレ？ 後のコードでは変換前のkindで判定してるし、、、
 
         if kind == _PKG_DIRECTORY:
             module = self.load_package(fqname, pathname)
@@ -113,7 +109,11 @@ class ModuleFinder(NativeModuleFinder):
 
         else:
             co = None
-        m = self.add_module(fqname)
+
+        m: modulefinder.Module = self.add_module(fqname)
+        # 引数fqnameで指定されたModuleをModuleFinderのmodules[fqname]に加える。
+        # 戻り値は引数fqnameで指定されたModule。
+
         m.__file__ = pathname
         if co:
             if self.replace_paths:
@@ -123,15 +123,13 @@ class ModuleFinder(NativeModuleFinder):
         self.msgout(2, "load_module ->", m)
         return m
 
-    def scan_code(self, co, m):
+    def scan_code(self, co, m: modulefinder.Module):
         code = co.co_code   # noqa
-        # if sys.version_info >= (3, 4):
-        #     scanner = self.scan_opcodes
-        # elif sys.version_info >= (2, 5):
-        #     scanner = self.scan_opcodes_25
-        # else:
-        #     scanner = self.scan_opcodes_24
         scanner = self.scan_opcodes
+        # scannerは内部でdis._find_store_namesとdis._find_importsをコールする。
+        # "store", "absolute_import", "relative_import"のいずれかをyieldで返す。
+        # https://github.com/python/cpython/blob/main/Lib/dis.py
+
         for what, args in scanner(co):
             if what == "store":
                 name, = args
